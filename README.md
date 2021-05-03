@@ -36,10 +36,10 @@
 ```
 
 Tiamat is a license checking utility that runs 8 32-bit architectures from inside a MIPS ELF binary. The architecutres include:
-- SPARC LE/EB  
-- MIPS LE/EB
-- ARM LE/EB
-- RISCV LE/EB
+- SPARC Little/Big Endian 
+- MIPS  Little/Big Endian
+- ARM   Little/Big Endian
+- RISCV Little/Big Endian
 
 An instruction's architecutre is determined by the tmap section inside the binary, which is then used by qemooo to generate the intermediate TCG code. 
 
