@@ -9,7 +9,7 @@ def base_path():
     return os.path.dirname(os.path.realpath(sys.argv[0]))
 
 class CompilerTest(unittest.TestCase):
-    base_path = "/cooonj/service/src/chal_builder"
+    base_path = "//service/src/chal_builder"
 
     def build_binary(self, relative_test_fpath):
         with archr.targets.DockerImageTarget("cj/builder") as t:

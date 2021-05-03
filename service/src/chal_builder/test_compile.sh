@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -x
 srcfn=$1
-binfn=${srcfn%.cjasm}.bin
+binfn=${srcfn%.tasm}.bin
 
 if [[ $4 != "-run" ]]; then
   docker exec -it cjb2 bash -l -c 'export PATH=$PATH:/opt/sparc/bin:/opt/riscv/bin; source /root/venv/bin/activate; cd /tiamat/service/src/chal_builder; python3 -m compiler '"$srcfn -o $binfn"
