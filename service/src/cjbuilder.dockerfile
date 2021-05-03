@@ -107,20 +107,22 @@ RUN cd /root && git clone -q https://github.com/etrickel/docker_env.git && cp -r
 RUN bash -c "source /root/venv/bin/activate && \
              pip install ipython  "
 
-COPY cjemu /root/cjemu
+COPY qemooo /root/qemooo
 
-RUN cd /root/cjemu && rm -rf build-user && mkdir -p build-user && cd build-user && \
+RUN cd /root/qemooo && rm -rf build-user && mkdir -p build-user && cd build-user && \
     ../configure --disable-system  --enable-linux-user --static \
                  --target-list=arm-linux-user,i386-linux-user,mipsel-linux-user,riscv32-linux-user,sparc32plus-linux-user \
                  --enable-debug --disable-werror --enable-debug-info --enable-debug-tcg --enable-trace-backends=simple
 
-RUN cd /root/cjemu/build-user && make -j$(nproc) || true
+RUN cd /root/qemooo/build-user && ../qemooo-build.sh
 
-RUN cd /root/cjemu/build-user && cp ../backup-build.ninja.sparc.root.dir build.ninja && make -j$(nproc)
 
-RUN mkdir -p /cooonj/service/src/chal_builder/
-COPY chal_builder /cooonj/service/src/chal_builder
+RUN mkdir -p /tiamat/service/src/chal_builder/
+COPY chal_builder /tiamat/service/src/chal_builder
 
-WORKDIR /cooonj/service/src/chal_builder/
+WORKDIR /tiamat/service/src/chal_builder/
 RUN bash -c "source /root/venv/bin/activate && \
              pip install -e . "
+
+
+

@@ -61,6 +61,10 @@ cd service/src/chal_builder
 
 ```
 
+To build qemooo, you will need to clone https://github.com/o-o-overflow/qemooo
+In the `service/src` folder and then build a container using the `cjbuilder.dockerfile`
+
+
 # Bugs
 To complete the challenge, it is necessary to figure out how qemooo implements the various architectures and find the bugs that result from the interaction between them.
 
@@ -70,7 +74,7 @@ To complete the challenge, it is necessary to figure out how qemooo implements t
 4. Another action failed to close the file.
 
 
-
+Good luck!
 
 
 
