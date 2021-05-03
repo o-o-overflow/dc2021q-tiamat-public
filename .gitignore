@@ -1,0 +1,6 @@
+/public_bundle.tar.gz
+.idea/*
+/service/src/cjemu/*
+/service/src/qemu/*
+/service/src/qemu-orig/*
+

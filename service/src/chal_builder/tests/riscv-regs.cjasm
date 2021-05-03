@@ -1,0 +1,39 @@
+RISCV addi  x1, x0, 0x11   # at/r1
+RISCV addi  x2, x0, 0x22   # v0/r2
+RISCV addi  x3, x0, 0x33   # v1/r3
+RISCV addi  x4, x0, 0x44   # a0/r4
+
+RISCV addi  t0, x0, 0x55   # x5/t0 =>a1/r5
+RISCV addi  x6, x0, 0x66   # x6/t1 =>a2/r6
+RISCV addi  t2, x0, 0x77   # x7/t2 =>a3/r7
+
+RISCV addi  s0, x0, 0x88   # x8/s0 => t0
+RISCV addi  x9, x0, 0x99   # x9/s1 => t1
+
+RISCV addi  a0, x0, 0xaa   # t2
+RISCV addi  x11, x0, 0xbb   # t3
+RISCV addi  a2, x0, 0xcc   # t4
+RISCV addi  x13, x0, 0xdd   # s1
+RISCV addi  a4, x0, 0xee   # s1
+RISCV addi  x15, x0, 0xff   # s1
+RISCV addi  a6, x0, 0x100   # s1
+RISCV addi  x17, x0, 0x101   # s1
+
+RISCV addi  s2, x0, 0x102   # x18/s2 => s2
+RISCV addi  x19, x0, 0x103  # x19/s3 => s3
+RISCV addi  s4, x0, 0x104   # x20/s4 => s4
+RISCV addi  x21, x0, 0x105  #
+RISCV addi  s6, x0, 0x106   #
+RISCV addi  x23, x0, 0x107  #
+RISCV addi  s8, x0, 0x108   #
+RISCV addi  x25, x0, 0x109  #
+RISCV addi  s10, x0, 0x10a  # k0
+RISCV addi  x27, x0, 0x10b  # k1
+
+RISCV addi  t3, x0, 0x10c   # gp
+RISCV addi  x29, x0, 0x10d  # sp
+RISCV addi  t5, x0, 0x10e   # s8
+RISCV addi  x31, x0, 0x10f  # ra
+
+
+

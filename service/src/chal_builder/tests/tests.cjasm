@@ -1,0 +1,48 @@
+
+#MIPS addi $t0, $zero, 2
+RISCV mv x12, x29
+#MIPS sw $zero, 20($sp)         #
+
+#SPARC mov	1,%o0			! 1 is stdout
+#RISCV addi  x2, x29, 8     #  load value at $sp+8
+#SPARC set	start,%o1
+#SPARC mov	18,%o2	! length
+#SPARC mov	4,%g1			! 4 is SYS_write
+#SPARC ta	0x10
+
+#MIPS li $t4, -5
+
+SPARC add %g1, -1 %g1
+SPARC sw %g1, [%g6]
+#RISCV addi x14, x14, 0xff
+#RISCV sll x14, x14, 8
+#RISCV addi x14, x14, 0xab
+#RISCV sll x14, x14, 8
+#RISCV addi x14, x14, 0xdd
+#RISCV sll x14, x14, 8
+#RISCV addi x14, x14, 0x98
+#SPARC dec %g7
+#RISCV sw x14,0(x29)
+#RISCV sw x14,4(x29)
+#RISCV addi x12, x29, 0
+#RISCV addi x9, x12, 0x777
+#SPARC ld [%g6], %g4
+
+
+#RISCV addi a0, x29, 16
+#RISCV addi a1, x0, 0
+#RISCV addi x17, x0, 101 # nanosleep
+#RISCV ecall
+
+
+MIPS li $a0, 42
+MIPS li $v0, 4001 # terminate program
+MIPS syscall
+
+.data
+start:
+.string "this is the start\n"
+endstr:
+.string "this is the end  \n"
+ptime:
+.word 0x2

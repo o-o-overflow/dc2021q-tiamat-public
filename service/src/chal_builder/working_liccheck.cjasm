@@ -1,0 +1,378 @@
+# init vars
+ARM adr r1, datasection     @
+RISCV addi x27, x1, 0
+
+#
+MIPS addi $v0, $sp, 0x100
+# char userinput[36]@ sp+0x100
+RISCV sw x2, 0(x29)         # should save it to 0x40800370
+SPARC add %g1,4,%g1        ; 36 for userinput array
+
+RISCV sw x2, 0(x29)         # should save it to 0x40800370
+# char key[32] @ sp+0x120
+SPARC add %g1,36,%g1        ; 36 for userinput array
+MIPS sw $v0, 4($sp)         # letter input
+
+MIPS sw $zero, 8($sp)   # init to 0, menu character
+MIPS sw $zero, 12($sp)  # init to 0, length of flag input read in
+
+#ARM mov r0, #5
+#RISCV addi x6, x0, 0x55
+#MIPS addi $t4, $zero, 0x66
+
+#MIPS sw $v0, 8($sp)
+#RISCV sw x2, 8(x29)
+#SPARC mov -0xfff, %g2
+
+#RISCV addi x14, x29, 0
+#SPARC st %g2, [%g7+8]
+
+ready_prompt:
+RISCV andi  x25, x25,0
+SPARC mov	4,%g1			! 4 is SYS_write
+SPARC mov	1,%o0			! 1 is stdout
+SPARC set	entryprompt,%o1		! pointer to buffer
+SPARC mov   %o1,%g2
+SPARC mov	6,%o2	! length
+SPARC ta	0x10
+
+# reading in from std input
+SPARC mov	0,%o0			    ! 0 is stdin
+
+MIPS addi $v0, $sp, 8      # stack+8, char input
+SPARC mov   %g1,%o1
+SPARC mov	3,%g1			# 3 is SYS_read
+SPARC mov	2,%o2	        ! count
+SPARC ta	0x10           ! do SYSCALL # 118
+SPARC mov   %o0,%g7
+
+
+#SPARC mov   %o0,%g7        # bytes read in
+#MIPS sw $t6, 16($sp)
+# DEBUGGING: Print out user input at sp+8
+RISCV addi  x10, x25, 1     # 1 = StdOut
+RISCV addi  x11, x29, 8     #  load value at $sp+8
+RISCV addi  x12, x25, 1     # length of our string
+RISCV addi  x17, x25, 64    # linux write system call
+RISCV ecall                # Call linux to output the string
+
+# DEBUGGING FOR FD value
+SPARC mov 1,%g2
+RISCV addi  a1, x29, 16
+MIPS li $t4, 2
+RISCV addi  a7, x0, 64     # linux write system call
+RISCV ecall                # Call linux to output the string
+
+# Adding newline
+RISCV addi  a0, x0, 1      # 1 = StdOut
+RISCV addi  a1, x27, 0
+RISCV addi  a2, x0, 1      # length of our string
+RISCV addi  a7, x0, 64     # linux write system call
+RISCV ecall                # Call linux to output the string
+
+#### OPTION table
+RISCV beq x14, x0, quitit
+RISCV lb x4, 8(x29)       # load value at $sp+8 (userinput)
+
+MIPS  li $a1, 0x76          ; v option
+RISCV beq x4, x5,verify_input
+MIPS  li $a1, 0x65          ; e option
+RISCV beq x4, x5,enter_key
+MIPS  li $a1, 0x70          ; p option
+RISCV beq x4, x5, print_input
+
+MIPS b quitit
+
+#### END OPTION table
+
+enter_key:
+
+# reading in from std input
+SPARC mov	0,%o0			    ! 0 is stdin
+RISCV lw x2, 0(x29)
+#MIPS addi	$v0, $sp, 0     # get sp and mov into o1
+SPARC mov   %g1,%o1
+SPARC mov	3,%g1			# 3 is SYS_read
+SPARC mov	32,%o2	        ! count
+SPARC ta	0x10           ! do SYSCALL
+SPARC mov   %o0,%g7        # bytes read in
+MIPS sw $t6, 8($sp)
+
+
+print_input:
+
+
+# printing back what was read in from stdin
+MIPS addi	$t3, $sp, 0
+RISCV addi  a0, x0, 1      # 1 = StdOut
+RISCV lw a1, 0(x29)
+#RISCV addi  a2, x0, 12     # length of our string
+MIPS lw $t4, 8($sp)
+RISCV add  a2, x0, x14
+RISCV addi  a7, x0, 64     # linux write system call
+RISCV ecall                # Call linux to output the string
+
+
+# Adding newline
+RISCV addi  a0, x0, 1      # 1 = StdOut
+RISCV addi  a1, x27, 0
+RISCV addi  a2, x0, 1      # length of our string
+RISCV addi  a7, x0, 64     # linux write system call
+RISCV ecall                # Call linux to output the string
+
+
+MIPS b ready_prompt
+
+# End option p
+
+############## Starting verify input
+verify_input:
+#ARM mov r0, #5           ; STDOUT ARM
+#SPARC set licfn,%r2
+#ARM mov r1, r2
+#ARM adr r1, licfn        ; R1/arg0 = address of string ARM
+
+#ARM mov r2, #0           ; R2/arg1 = mode 0
+#ARM mov r3, #0           ; R2/arg1 = mode 0
+#ARM mov r7, #5           ; R7 = syscall number for 'open'
+#ARM svc #0               ; invoke syscall    ARM
+# open key compare file
+#ARM mov r2, r0           ; save the file descriptor
+
+# open key compare file
+MIPS li   $v0, 4005       # system call for open file
+SPARC set licfn,%r2
+MIPS li   $a1, 0        # Open for reading (flags are 0: read, 1: write)
+MIPS li   $a2, 0        # mode is ignored
+MIPS syscall            # open a file (file descriptor returned in $v0)
+RISCV addi x4, x2, 0
+MIPS move $a0, $v0      # save the file descriptor
+
+#IPS li $a0, 12
+#IPS li $v0, 4001 # terminate program
+#IPS syscall
+
+#MIPS move $a0, $v0
+
+RISCV addi x2, x0, 0x30
+#RISCV sw x2, 16(x29) # store FD at stack+16
+MIPS sw $v0, 16($sp)
+
+
+
+got_result:
+# DEBUGGING FOR FD value
+MIPS li $t4, 1
+#RISCV addi  a0, x0, 1      # 1 = StdOut
+RISCV addi  a1, x29, 16
+MIPS li $t4, 2
+MIPS li $s1, 64
+#RISCV addi  a7, x0, 64     # linux write system call
+RISCV ecall                # Call linux to output the string
+
+
+
+# Adding newline
+RISCV addi  a0, x0, 1      # 1 = StdOut
+RISCV addi  a1, x27, 0
+RISCV addi  a2, x0, 1      # length of our string
+RISCV addi  a7, x0, 64     # linux write system call
+RISCV ecall                # Call linux to output the string
+
+reading_from_fd:
+# Reading from FD 3 @ mips(v0)/sparc(g1)
+SPARC mov	%g2,%o0	     # sparc(g2)/mips(arg0) stored above
+MIPS lw $v0, 4($sp)      # will read into userinput
+SPARC mov   %g1,%o1      # mov from mips(v0)/sparc(g1) into o1
+SPARC mov	3,%g1	     # 3 is SYS_read
+SPARC mov	32,%o2	     # number of characters to read
+SPARC ta	0x10         # do SYSCALL
+SPARC mov   %o0,%g1        # bytes read in
+
+RISCV addi x2, x2, 0
+MIPS sw $v0, 12($sp)
+
+# DEBUGGING FOR NOW Writing out mips(arg1)/riscv(x11) [sp+4]
+RISCV lw x11, 4(x29)
+RISCV addi  a0, x0, 1      # 1 = StdOut
+MIPS lw $t4, 12($sp)
+RISCV addi  a7, x0, 64     # linux write system call
+RISCV ecall                # Call linux to output the string
+
+# Adding newline
+RISCV addi  a0, x0, 1      # 1 = StdOut
+RISCV addi  a1, x27, 0
+RISCV addi  a2, x0, 1      # length of our string
+RISCV addi  a7, x0, 64     # linux write system call
+RISCV ecall                # Call linux to output the string
+
+RISCV li      x7, 0
+RISCV li      x8, 32
+
+RISCV lw x19, 0(x29)  ; points to userinput1
+RISCV lw x20, 4(x29)  ; points to auth key
+
+RISCV li x21, 0
+RISCV li x22, 0
+RISCV li x23, 0
+RISCV li x24, 0
+
+loop_head:
+RISCV bge     x7, x8, loop_end
+# Repeated code goes here
+RISCV add x21, x19, x7
+RISCV add x22, x20, x7
+RISCV lb x25, 0(x21)
+RISCV lb x26, 0(x22)
+
+MIPS move $v0, $t9
+MIPS move $v1, $k0
+
+RISCV add x4, x0, x24
+ARM cmp r2, r3
+ARM addne r4, r4, #1
+RISCV add x24, x0, x4
+
+RISCV addi  x10, x0, 1     # 1 = StdOut
+RISCV add x11, x0, x21
+RISCV addi  x12, x0, 1     # length of our string
+RISCV addi  x17, x0, 64    # linux write system call
+RISCV ecall                # Call linux to output the string
+
+RISCV addi  a0, x0, 1      # 1 = StdOut
+RISCV add x11, x0, x22
+RISCV addi  a2, x0, 1     # length of our string
+RISCV addi  a7, x0, 64     # linux write system call
+RISCV ecall                # Call linux to output the string
+
+# Adding newline
+RISCV addi  a0, x0, 1      # 1 = StdOut
+RISCV addi  a1, x27, 0
+RISCV addi  a2, x0, 1      # length of our string
+RISCV addi  a7, x0, 64     # linux write system call
+RISCV ecall                # Call linux to output the string
+
+RISCV addi    x7,x7, 1
+RISCV j		loop_head
+loop_end:
+
+MIPS sw $zero, 12($sp)  # init to 0, length of flag input read in
+
+RISCV bge     x0, x24, good_match
+
+SPARC mov 4, %g2
+
+# skipped if match
+# AUTHORIZATION FAILED MSG and exit
+RISCV addi  a0, x0, 1      # 1 = StdOut
+RISCV addi  a1, x27, 25
+RISCV addi  a2, x0, 24     # length of our string
+RISCV addi  a7, x0, 64     # linux write system call
+RISCV ecall                # Call linux to output the string
+
+# FAILED AUTH return to prompt
+
+MIPS b ready_prompt
+
+good_match:
+
+####
+#### Everythings great, print flag, and exit
+####
+# open FLAG  file
+MIPS li   $v0, 4005       # system call for open file
+SPARC set flagfn,%r2
+MIPS li   $a1, 0        # Open for writing (flags are 0: read, 1: write)
+MIPS li   $a2, 0        # mode is ignored
+MIPS syscall            # open a file (file descriptor returned in $v0)
+MIPS move $a0, $v0      # save the file descriptor
+
+# Reading from FD 3 @ mips(v0)/sparc(g1)
+SPARC mov	%g2,%o0	     # sparc(g2)/mips(arg0) stored above
+MIPS lw $v0, 4($sp)      # will read into userinput
+SPARC mov   %g1,%o1      # mov from mips(v0)/sparc(g1) into o1
+SPARC mov	3,%g1	     # 3 is SYS_read
+SPARC mov	32,%o2	     # number of characters to read
+SPARC ta	0x10         # do SYSCALL
+SPARC mov   %o0,%g7        # bytes read in
+MIPS sw $t6, 12($sp)
+
+# DEBUGGING FOR NOW Writing out mips(arg1)/riscv(x11) [sp+4]
+RISCV lw x11, 4(x29)
+RISCV addi  a0, x0, 1      # 1 = StdOut
+MIPS lw $t4, 12($sp)
+RISCV addi  a7, x0, 64     # linux write system call
+RISCV ecall                # Call linux to output the string
+
+# Adding newline
+RISCV addi  a0, x0, 1      # 1 = StdOut
+RISCV addi  a1, x27, 0
+RISCV addi  a2, x0, 1      # length of our string
+RISCV addi  a7, x0, 64     # linux write system call
+RISCV ecall                # Call linux to output the string
+
+### Fall through to exit 0
+############## END OF verify input
+
+#####################################################################################
+# Sending hangup message
+quitit:
+MIPS addi	$t3, $k1, 0
+RISCV addi  a0, x0, 1      # 1 = StdOut
+RISCV addi  a2, x0, 7     # length of our string
+RISCV addi  a7, x0, 64     # linux write system call
+RISCV ecall                # Call linux to output the string
+
+# doing exi
+MIPS li $a0, 0
+MIPS li $v0, 4001 # terminate program
+MIPS syscall
+
+#RISCV la a0, licfn # load address of helloworld
+#ARM mov r8, r2
+#MIPS li $a1, 0  # readonly mode
+#SPARC mov 4005,%r2#
+#MIPS syscall  #r2=4005, r4=filename, r5, mode=0
+
+#readfile:
+#SPARC mov	0,%o0			    ! 0 is stdin
+#MIPS addi	$v0, $sp, 0
+#SPARC mov   %g1,%o1
+#SPARC mov	3,%g1			    ! 3 is SYS_read
+#SPARC mov	12,%o2	        ! count
+#SPARC ta	0x10                ! do SYSCALL
+
+#ARM mov r0, #1               @ STDOUT ARM
+#ARM mov r2, #52               @ R2 = size of string MIPS
+#ARM adr r1, entryprompt       @ R1 = address of string ARM
+#ARM mov r7, #4               @ R7 = syscall number for 'write' MIPS
+#ARM svc #0                   @ invoke syscall    ARM
+
+#exit:
+#MIPS li $v0, 4004 # system call code for printing string = 4004
+#MIPS li $a0, 1
+#ARM adr r5, hangup       @ R1 = address of string ARM
+#MIPS add $a1, $a1, 0
+#MIPS li $a2, 12
+#MIPS syscall # call operating system to perform operation
+
+#MIPS li $a0, 42
+#MIPS li $v0, 4001 # terminate program
+#MIPS syscall
+
+# auth = 7, read=6, lic = 4, flag=5, authf = 22
+.data
+startdata:
+hangup:
+.string "\nATH0 \n"
+entryprompt:
+.string "READY\n"
+licfn:
+.string	"/lic"
+flagfn:
+.string	"/flag"
+.msgend:
+authfmsg:
+.string "Authorization failed!\n"
+ccmsg:
+.string "Protovision's software distribution server\nCopyright 1981. All rights reserved.\n"

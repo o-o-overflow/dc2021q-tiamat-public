@@ -1,0 +1,3 @@
+src/qemu/*
+src/qemu-orig/*
+src/cjemu/build-user/**

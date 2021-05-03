@@ -1,0 +1,11 @@
+qemu-orig
+qemu-orig/*
+
+*.o
+core
+*.core
+qemu/buildqu
+qemu/buildqu/*
+backup.build.ninja
+/qemu/*
+/cjemu/*

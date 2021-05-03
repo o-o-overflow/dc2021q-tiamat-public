@@ -1,0 +1,4 @@
+src/qemu/*
+src/qemu-orig/*
+src/cjemu/*
+!src/cjemu/build-user/mipsel-linux-user/qemu-mipsel

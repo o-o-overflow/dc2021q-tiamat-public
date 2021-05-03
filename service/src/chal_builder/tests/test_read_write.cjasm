@@ -1,0 +1,42 @@
+SPARC mov	0,%o0			    ! 0 is stdin
+MIPS addi	$v0, $sp, 0
+SPARC mov   %g1,%o1
+SPARC mov	3,%g1			    ! 3 is SYS_read
+SPARC mov	12,%o2	        ! count
+SPARC ta	0x10                ! do SYSCALL
+MIPS addi	$t3, $sp, 0
+RISCV addi  a0, x0, 1      # 1 = StdOut
+RISCV addi  a2, x0, 12     # length of our string
+RISCV addi  a7, x0, 64     # linux write system call
+RISCV ecall                # Call linux to output the string
+ARM mov r0, #1               @ STDOUT ARM
+ARM adr r1, stringdata-0xd00       @ R1 = address of string ARM
+ARM add r1, r1, #0x500
+ARM add r1, r1, #0x500
+ARM add r1, r1, #0x300
+ARM mov r2, #12               @ R2 = size of string MIPS
+ARM mov r7, #4               @ R7 = syscall number for 'write' MIPS
+ARM svc #0                   @ invoke syscall    ARM
+MIPS li $v0, 4004 # system call code for printing string = 4004
+MIPS li $a0, 1
+ARM adr r5, stringdata-0xd00       @ R1 = address of string ARM
+ARM add r1, r1, #0x500
+ARM add r1, r1, #0x500
+ARM add r1, r1, #0x300
+MIPS add $a1, $a1, 24
+MIPS li $a2, 12
+MIPS syscall # call operating system to perform operation
+MIPS li $a0, 42
+MIPS li $v0, 4001 # terminate program
+MIPS syscall
+
+.data
+nextdata:
+.string "12riscv34 \n"
+stringdata:
+.string "56arm78   \n"
+.msg:
+.string	"9AsparcBC \n"
+.msgend:
+mipsstr:
+.string "DEmipsF1  \n"

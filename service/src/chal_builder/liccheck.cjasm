@@ -1,0 +1,791 @@
+# init vars
+# x27 = constants start, x29 = stack start, x20 = heap start
+MIPS	sw		@zero, 8(@sp)   
+MIPS	sw		@zero, 12(@sp)  
+MIPS	sw		@zero, 20(@sp)  
+MIPS	sw		@zero, 24(@sp)  
+MIPS	sw		@zero, 28(@sp)  
+MIPS	sw		@zero, 32(@sp)  
+
+ARM		adr		@r2, hangup -0xd00   ; set @r2 = first constant variable
+RISCV	addi	@const, @r2, 0x700   ; set @const = first constant
+RISCV	addi	@const, @const, 0x600   ; set @const = first constant
+SPARC	add		@r2, 0xd00, @const      ; set i7 = first constant
+RISCV	addi	@r14, @r0, 0         ;
+SPARC	mov		8, %l7               ; license check counter
+SPARC	mov		24, %l6              ; next pin counter
+
+######## Gotta get me some memories
+RISCV	add		a0, @r0, @r0         ; no, you pick where, NULL
+MIPS	addi	$s1, @zero, 214      ; brk syscall # 214 for RISCV
+RISCV	ecall	; Pray to linux
+
+MIPS	addi	@heap, @r10, 0       ; save heap loc to  @heap/s8, it'll also be at 0(sp)
+ARM		mov		@r4, @r10            ; ARG 0 (x4)  : address to change memory permissions
+MIPS	addi	@r6, @zero, 0x3      ; ARG 2 (x6)  : PROT_READ | PROT_WRITE
+ARM		mov		@r5, #0x500          ; ARG 1 (x5)  : set it for the next 0x500 bytes
+RISCV	addi	@r2, @r0, 125        ; set @r2 = 125 base+125 = mprotect syscal
+SPARC	add		@r2, 4000, @r2       ; SYSCALL (x2): MIPS	mprotect	syscall == 4125 (4000+125)
+MIPS	syscall
+RISCV	sw		@r0, 0(@heap)        ; zero out heap starting location 21000
+
+MIPS	addi	@r6, @sp, 0       ; move stack address into @r6/a2 to move in SPARC i6
+SPARC	mov		@r6, @sp          ; save sp in sparcy's registers
+
+RISCV	addi	@r2,  @heap, 0      ; move heap address to @r2
+SPARC	mov		@r2, @heap        ; init SPARC	heap	loc
+# char userinput[32]; heap+0x100
+
+ARM		add		@r2, @r2, #4        ; @r2 =  heap+4
+
+# char key[32]
+RISCV	sw		@r2, 0(@sp)        ; users 32-byte key at 0(@sp)
+MIPS	sw		@r0, 0(@r2)         ; init to 0, user key
+SPARC	add		@r2,32,@r2        ; next heap loc is after 32 bytes for user's key
+
+# char license[32]
+MIPS	sw		@r2, 4(@sp)         ; 32-byte license key
+SPARC	add		@r2,0x100,@r2      ; extra space after license key
+
+#MIPS	sw		@zero, 8(@sp)   # init to 0, menu character
+#RISCV	sw		@zero, 12(@sp)  # init to 0, length of flag input read in offset 12, length of user's input read in offset 14
+#MIPS	sw		@zero, 20(@sp)  # init secondary action input to 0,
+#RISCV	sw		@zero, 24(@sp)  # init the rest
+#MIPS	sw		@zero, 28(@sp)  # init the rest
+#RISCV	sw		@zero, 32(@sp)  # init the rest
+
+# game list char[300] addr 0x21124
+MIPS	sw		@r2, 28(@sp)         ; game list will go here
+RISCV	sw		@zero, 0(@r2)       ; move 0 to first bytes of game list (inited for caching check)
+
+SPARC	add		@r2,0x200,@r2      ; space after game list
+
+# game data
+MIPS	sw		@r2, 32(@sp)         ; game file read into heap addr 0x21324
+
+RISCV	jal		next_pin
+ARM		mov		@r0, #0
+
+####################################
+#  Show welcome message
+####################################
+
+SPARC	mov		(dragon-hangup), @r10   ; offset to ccmsg
+RISCV   add     @r10, @r10, @const     ; ARG 0: offset + @const
+SPARC	mov		(end_dragon-dragon), @r4  ; length into x4
+ARM     add     @r11, @r4              ; ARG 1: is length
+RISCV	jal		println
+
+#############################################################
+# Ready prompt
+#############################################################
+ready_prompt:
+MIPS	sw		@zero, 8(@sp)   # init to 0, menu character
+
+SPARC	set		entryprompt,@r10	; ARG 0: pointer to buffer
+MIPS	add		@r11, @zero, 5
+RISCV	jal		println
+
+# reading in from std input into action variable at stack+8
+SPARC	mov		0,%o0			    ; 0 is stdin
+MIPS	addi	@r2, @sp, 8         ; stack+8, char input
+SPARC	mov		@r2,%o1             ; ARG 1: stack + 8
+ARM	    mov		@r2, #3			    ; 3 is SYS_read
+SPARC	mov		1,%o2	            ; ARG 2: length of input to read
+SPARC	ta		0x10                ; do SYSCALL
+
+SPARC	mov		%o0, @r6            ; Results into x6 (num bytes read in)
+
+MIPS	li		@r5, 0x67           ; g option
+RISCV	lb		@r4, 8(@sp)         ; load value at @sp+8 (userinput)
+RISCV	beq		@r4, @r5, gitgonemidjmp
+
+SPARC	mov		1,%o0			    ; ARG 0: 1 is stdout
+RISCV	addi	@r2, @sp, 8         ; load address at @sp+8 into x2
+SPARC	mov		@r2, %o1            ; ARG 1: address of input character
+ARM	    mov		@r2, #4			    ; 4 is SYS_write  (ARM must be 1 instruction above SPARC's syscall
+SPARC	mov		1,%o2	            ; ARG 2: length to write out
+SPARC	ta		0x10
+
+####################################
+#  Option jump table
+####################################
+
+RISCV	beq		@r6, @r0, middle_quitit
+RISCV	lb		@r4, 8(@sp)       # load value at @sp+8 (userinput)
+
+MIPS	li		@r5, 0x6a          ; j option
+RISCV	beq		@r4, @r5, joshua
+
+SPARC	mov		1,%o0			! 1 is stdout
+RISCV	addi	@r2, @const, 0      #  load value at @sp+8
+SPARC	mov		@r2,%o1
+SPARC	mov		1,%o2	        ! length
+SPARC	mov		4, @r2			! 4 is SYS_write
+SPARC	ta		0x10
+
+RISCV	addi	@r2, @r0, 0
+
+ARM     mov     @r5, #0x65               ; 0x65 == e option
+RISCV	beq		@r4, @r5,enter_key
+
+MIPS	addi	@r5, @r5, 7              ; 0x6c == l option
+RISCV	beq		@r4, @r5, list_games
+
+MIPS	addi	@r5, @r5, 2              ; 0x6e == n option (next key)
+ARM		adr		@r1, ready_prompt
+RISCV	beq		@r4, @r5, next_pin
+
+ARM	    add 	@r5, @r5, #2             ; 0x70  == p option
+RISCV	beq		@r4, @r5, print_input
+
+MIPS	addi	@r5, @r5, 0x2            ; 0x72 == r option
+RISCV	beq		@r4, @r5, ready_prompt
+
+ARM 	add 	@r5, @r5, #4             ; 0x76 == v option
+RISCV	beq		@r4, @r5,verify_input
+
+## ELSE
+RISCV	j	middle_quitit
+
+#### END OPTION table
+
+####################################
+#  take users key
+####################################
+
+enter_key:
+ARM		mov		@r0, #0
+
+SPARC	mov		(enter_key_prompt-hangup), %g5   ; offset to label
+SPARC	add		@const, %g5, %g5                            ; prompt ptr into @r10 = a0
+SPARC	mov		(end_enter_key_prompt - enter_key_prompt), @r12   ; prompt length
+MIPS	add		@r11, $t4, @zero                                   ; into @r12 = a1
+
+RISCV	jal		println
+
+# reading in from std input
+SPARC	mov		0,%o0			  ; ARG 0 : 0 is stdin
+RISCV	lw		@r2, 0(@sp)
+SPARC	mov		@r2,%o1           ; ARG 1 : address of users key
+ARM	    mov		@r2, #3			  ; 3 is SYS_read on SPARC
+RISCV	addi	@r12, @r0, 32
+SPARC	mov		@r12, %o2	      ; ARG 2 : bytes to be read in
+SPARC	ta		0x10              ; do SYSCALL
+
+SPARC	mov		%o0, @r6          ; bytes read in moved to x6
+MIPS	sb		@r6, 14(@sp)
+
+ARM		mov		@r5, #0
+###  slight sanity check on input, verify key values between 0x30 and 0x66
+check_loop_head:
+# Repeated code goes here
+RISCV	lw		@r3, 0(@sp)
+RISCV	bge		@r5, @r12, check_loop_end
+MIPS	add		@r6, $v1, @r5   # index = base (a0) + counter (a1)
+MIPS	lb		@r7, 0($a2)      # load portion of hk from index, a2=x6, a3=x7
+
+SPARC	mov		0x29, @r2
+RISCV	ble		@r7, @r2, middle_quitit
+SPARC	mov		0x67, @r2
+RISCV	bge		@r7, @r2, middle_quitit
+
+MIPS	addi	@r5, @r5, 1    # a1 same as @r5
+RISCV	j	check_loop_head
+check_loop_end:
+
+SPARC	mov		(stars-hangup), @r10       ; offset to label
+SPARC	add		@const, @r10, @r10         ; ARG 0 (println) : x10 : prompt ptr
+MIPS	lb		@r11, 14(@sp)              ; ARG 1 (println) : x11 : length of prompt
+RISCV	jal		println
+
+
+RISCV	j	ready_prompt
+
+####################################
+#  print users key
+####################################
+print_input:
+# printing back what was read in from stdin at 0(@sp)
+
+RISCV	lw		a0, 0(@sp)
+ARM		add		@r11, @r0, #32    ; set value using good ole @r0
+RISCV	jal		println
+
+RISCV	j	ready_prompt
+
+# End option p
+####################################
+#  joshua backdoor
+####################################
+joshua:
+
+# reading in from std input
+SPARC	mov		@zero, @r10	    ; 0 is stdin
+RISCV	addi	@r11, @sp, 20
+MIPS	li		@r17, 63			; 3 is SYS_read
+ARM 	mov     @r12, #6	    ; ARG 2: bytes to receive
+#SPARC	ta		0x10            ; do SYSCALL
+RISCV   ecall
+MIPS    add    @r6, @r10, @zero
+
+#SPARC	mov		%o0,@r6        # bytes read in
+
+# check that read in key matches oshua
+MIPS	li		@r5, 0x6               ; j option
+RISCV	bne		@r6, @r5, middle_quitit
+MIPS	lui		@r5,0x7568             ; loading oshu
+MIPS	ori		@r5,$a1,0x736f
+RISCV	lw		@r6, 20(@sp)
+RISCV	bne		@r6, @r5, middle_quitit   ; compare
+MIPS	li		@r5, 0xa61             ; load a\n
+RISCV	lw		@r6, 24(@sp)
+RISCV	bne		@r6, @r5, middle_quitit   ; compare
+
+# print oshua\n
+ARM     mov     @r6, #1
+SPARC	mov		@r6, %o0	 	      ; ARG 0 : 1 is stdout
+ARM     mov     @r2, #4			      ; 4 is SYS_write on SPARC
+SPARC	add		@sp, 20, @r14         ;    like a g6, g6, g6 :: BUG :: causes overwrite of @r15
+SPARC	mov		@r14, %o1             ; ARG 1 : 20(@sp) into argument
+SPARC	mov		6,%o2	              ; ARG 2 : num bytes to print
+SPARC	ta		0x10
+
+SPARC	mov		(fmsg-hangup), @r10   ; dist to string from i7
+RISCV 	add		@r10, @r10, @const
+SPARC	mov		(endfmsg-fmsg), @r2   ; length of str
+MIPS	add		@r11, @r0, @r2
+RISCV	jal		println
+
+ARM		mov		@r0, @r10
+
+RISCV	j	ready_prompt
+
+####### Middle jump point for gitgone
+SPARC	mov		1,%o0			; Random stuff
+MIPS	ori		@r5,$a1,0x736f  ; Random stuff
+RISCV	lw		@r6, 24(@sp)    ; Random stuff
+gitgonemidjmp:
+RISCV	addi	@r5, @r0, 0     ; Random stuff
+RISCV j gitgone
+
+####################################
+#  list o games
+####################################
+MIPS	nop
+SPARC	nop
+SPARC	nop
+list_games:
+MIPS	lui		@r5,0x7568
+MIPS	ori		@r5,$a1,0x736f
+RISCV	lw		@r6, 20(@sp)
+
+RISCV	bne		@r6, @r5, gitgone
+
+MIPS	lw		@r2, 28(@sp)      # will read into userinput
+MIPS	lw		@r2, 0(@r2)
+RISCV	bne		@r2, @r0, skip_read
+
+# Open file
+SPARC   mov     (gamesfn-datasection), @r4
+RISCV	add 	@r4, @r4, @const   ; too many lines to end causing problems with space left for ins
+MIPS	li		@r2, 4005
+RISCV	addi	@r5, @r0, 0        ; mode is 0 / read
+MIPS	syscall
+ARM	mov	@r4, @r2
+
+read_from_game_list:
+# Reading from FD 3 ; mips(v0)/sparc(g1)
+SPARC	mov		@r4,%o0	     # sparc(g2)/mips(arg0,x4) stored above, mov @r4 -> %o0
+MIPS	lw		@r2, 28(@sp)      # will read into userinput
+SPARC	mov		@r2,%o1      # mov from mips(v0)/sparc(g1) into o1 (userinput)
+ARM 	mov		@r2, #3	     ; 3 is SYS_read
+SPARC	mov		297,%o2	     # number of characters to read
+SPARC	ta		0x10         # do SYSCALL
+SPARC	mov		%o0, @r2        # bytes read in
+
+
+MIPS	li		@r2, 4006    ; Close file
+MIPS	syscall
+
+skip_read:
+RISCV	addi	a0, @r0, 1      # 1 = StdOut
+RISCV	lw		a1, 28(@sp)
+RISCV	li		a2, 297
+RISCV	addi	a7, @r0, 64     ; 64 is SYS_WRITE on RISCV
+RISCV	ecall	                ; do syscall
+
+SPARC	mov		1, %o0          ; STDOUT ARM
+RISCV	lw		a0, 0(@const)
+SPARC	mov		@r10, %o1
+SPARC	mov		1, %o2
+SPARC	mov		4, @r2
+SPARC	ta		0x10
+
+RISCV	jal		choose_game
+
+RISCV	j	    ready_prompt
+
+### Middle location for quitit
+SPARC	mov		1,%o0			   ; Random stuff
+MIPS	ori		@r5,$a1,0x736f     ; Random stuff
+RISCV	lw		@r6, 24(@sp)       ; Random stuff
+middle_quitit:
+SPARC	mov		1,%o0			   ; Random stuff 1 is stdout
+SPARC	add		@const, @r10, @r10 ; Random stuff
+RISCV j quitit
+
+##############################################################################################
+######  Starting verify input
+##############################################################################################
+## verify has the growing @r0 but also sets the random PIN
+MIPS	nop
+RISCV	nop
+verify_input:
+#verify the user has entered a key, **char
+RISCV	lw		@r2, 0(@sp)
+RISCV	lw		@r2, 0(x2)
+RISCV	beq		@r2, @r0, quitit
+
+# verify no more than allowed verifications a session
+SPARC	mov		%l7, @r2
+RISCV	beq		@r2,x0, quitit
+SPARC	dec		%l7
+
+# open FLAG  file
+#MIPS	li	@r2, 4005       # system call for open file
+#SPARC	set	licfn,%r2
+#MIPS	li	@r5, 0        # Open for writing (flags are 0: read, 1: write)
+#MIPS	li	@r6, 0        # mode is ignored
+#MIPS	syscall	# open a file (file descriptor returned in @r2)
+#MIPS	move	@r4, @r2      # save the file descriptor
+
+# Open file
+SPARC	set		licfn,%r2
+ARM		mov		@r0, @r4
+RISCV	addi	@r1, @r0, 0
+ARM		mov		@r7, #5               ; @r7 = syscall number for 'open' for ARM
+ARM		svc		#0                   ; invoke syscall    ARM
+
+RISCV	addi	@r2, @r0, 0
+ARM		mov		@r4, @r0
+RISCV	addi	@r2, @r4, 0x30
+
+RISCV	sw		@r2, 16(@sp)
+
+reading_license_from_fd:
+# Reading from FD 3 ; mips(v0)/sparc(g1)
+SPARC	mov		@r4,%o0	     # sparc(g2)/mips(arg0,x4) stored above, mov @r4 -> %o0
+MIPS	lw		@r2, 4(@sp)      # will read into userinput
+SPARC	mov		@r2,%o1      # mov from mips(v0)/sparc(g1) into o1 (userinput)
+SPARC	mov		3, @r2	     # 3 is SYS_read
+SPARC	mov		32,%o2	     # number of characters to read
+SPARC	ta		0x10         # do SYSCALL
+SPARC	mov		%o0, @r2        # bytes read in
+
+RISCV	addi	@r2, @r2, 0
+
+MIPS	sb		@r2, 12(@sp)  # save bytes read in
+
+RISCV	li		@r7, 0
+RISCV	li		@r8, 32
+ARM		mov		@r0, @r7
+
+
+MIPS	lw		$v1, 4(@sp)
+MIPS	lw		@r4, 0($v1)  ; TBD???
+MIPS	addi	@r5, @zero, 0    ; counter
+
+### encryption of the hash key
+encipher_loop_head:
+# Repeated code goes here
+RISCV	bge		@r5, @r2, encipher_loop_end ; if counter >= str len
+MIPS	add		@r6, $v1, @r5   # index = base (a0) + counter (a1)
+MIPS	lw		@r4, 0($a2)      # load portion of hk from index
+MIPS	xor		@r4, @r4, $t7  # stored at start, t7 = saved xor key
+MIPS	sw		@r4, 0($a2)
+MIPS	addi	@r5, @r5, 4
+RISCV	j	encipher_loop_head
+encipher_loop_end:
+
+
+RISCV	lw		@r19, 0(@sp)  ; points to userinput1
+RISCV	lw		@r20, 4(@sp)  ; points to auth key
+
+RISCV	li		@r21, 0
+RISCV	li		@r22, 0
+RISCV	li		@r23, 0
+RISCV	li		@r24, 0
+
+###### comparing input with license hash key (encrypting input with pin)
+loop_head:
+RISCV	bge		@r7, @r8, loop_end
+# Repeated code goes here
+RISCV	add		@r21, @r19, @r7
+RISCV	add		@r22, @r20, @r7
+RISCV	lw		@r25, 0(x21)
+RISCV	lw		@r26, 0(x22)
+
+MIPS	xor		@r2, $t9, @zero  ## encrypt user input, with 0 instead of t7
+MIPS	move	$v1, $k0
+
+RISCV	add		@r4, @r0, @r24
+ARM		cmp		@r2, @r3
+
+ARM		addne	@r4, @r4, #1
+RISCV	add		@r24, @r0, @r4
+RISCV	addi	@r7,x7, 4
+RISCV	j	loop_head
+loop_end:
+#### end of comparison
+
+#MIPS	sb	@zero, 12(@sp)  # init to 0, length of flag input read in
+
+RISCV	bge		@r0, @r24, good_match
+
+SPARC	mov		4, @r4
+
+# skipped if match
+# AUTHORIZATION FAILED MSG and exit
+RISCV	addi	a0, @r0, 1      # 1 = StdOut
+RISCV	addi	a1, @const, 25
+RISCV	addi	a2, @r0, 22     # length of our string
+RISCV	addi	a7, @r0, 64     # linux write system call
+RISCV	ecall	# Call linux to output the string
+
+# FAILED AUTH return to prompt, resetting pin to a new value
+
+MIPS	b	ready_prompt
+
+good_match:
+
+############################################
+# Everythings great, print flag, and exit
+############################################
+
+# open FLAG  file
+MIPS	li		@r2, 4005       # system call for open file
+SPARC	set		flagfn,%r2
+MIPS	li		@r5, 0        # Open for writing (flags are 0: read, 1: write)
+MIPS	li		@r6, 0        # mode is ignored
+MIPS	syscall	# open a file (file descriptor returned in @r2)
+MIPS	move	@r4, @r2      # save the file descriptor
+
+# Reading from FD 3 ; mips(v0)/sparc(g1)
+SPARC	mov		@r4,%o0	     # sparc(g2)/mips(arg0) stored above
+MIPS	lw		@r2, 4(@sp)      # will read into userinput
+SPARC	mov		@r2,%o1      # mov from mips(v0)/sparc(g1) into o1
+SPARC	mov		3, @r2	     # 3 is SYS_read
+SPARC	mov		36,%o2	     # number of characters to read
+SPARC	ta		0x10         # do SYSCALL
+SPARC	mov		%o0,%g3        # bytes read in
+MIPS	sw		@r6, 12(@sp)
+
+
+RISCV	lw		@r10, 4(@sp)    ; flag contents to a0
+MIPS	lw		@r11, 12(@sp)    ; flag length to a1
+RISCV	jal		println
+
+
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# ^^^^^^  END of verify input
+#^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+### Fall through to exit 0
+
+# Sending hangup message
+RISCV	nop
+ARM	nop
+SPARC	nop
+quitit:
+ARM		mov		@r0, #1               ; STDOUT ARM
+RISCV	addi	@r1, @const, 0
+ARM		mov		@r2, #1               ; @r2 = size of string MIPS
+ARM		mov		@r7, #4               ; @r7 = syscall number for 'write' MIPS
+ARM		svc		#0                   ; invoke syscall    ARM
+
+MIPS	addi	$t3, $k1, 0
+RISCV	addi	a0, @r0, 1      # 1 = StdOut
+RISCV	addi	a2, @r0, 7     # length of our string
+RISCV	addi	a7, @r0, 64     # linux write system call
+RISCV	ecall	# Call linux to output the string
+
+# doing exi
+MIPS	li		@r4, 22
+MIPS	li		@r2, 4001 # terminate program
+MIPS	syscall
+
+MIPS	nop
+SPARC	nop
+ARM	    nop
+
+# ###########################################
+do_encryption: ; encryption of the hash key using current pin
+# IN: a0 is (parm) *char (base address)
+# IN: a1/x5 is length of string
+# OUT: ==> *a0
+# ###########################################
+# LOC: t0/x8 is 4 characters
+# LOC: t1/x9 is counter
+# LOC: t2/x10 is ptr to 4 chars
+
+MIPS	addi	@r9, @zero, 0    ; counter
+
+RISCV	beq		@r5, @r0, enc2_loop_end
+
+
+enc2_loop_head:                  ; start of loop
+RISCV	bge		@r9,x5, enc2_loop_end   ; if counter >= str len then exit loop
+MIPS	add		@r10, @r4, @r9          ; index adr = base address (a0/x4) +
+RISCV	lw		@r8, 0(@r10)             ; load portion of hk from index
+MIPS	xor		@r8, @r8, @r15          ; xor stored at start, r15 = saved xor key
+RISCV	sw		@r8, 0(@r10)             ; store xor'd value back into *(char+index)
+MIPS	addi	@r9, @r9, 4           ; increase counter for next 4 characters
+RISCV	j	enc2_loop_head           ; return to loop
+enc2_loop_end:                   ; end of loop
+
+RISCV	jr		ra
+
+MIPS	nop
+SPARC	nop
+ARM	    nop
+# ###########################################
+# print line                #
+# ###########################################
+println:
+
+SPARC	mov		1,%o0			! 1 is stdout
+SPARC	mov		@r10,%o1         ; input in a0 = g5 = @r10
+MIPS	add		$t4, @r11, @zero ; move from @r11 to @r12 (aka g6)
+SPARC	mov		%g6,%o2	        ! length
+SPARC	mov		4, @r2			! 4 is SYS_write
+SPARC	ta		0x10
+
+# this is the new line
+RISCV	addi	a0, @r0, 1      # 1 = StdOut
+RISCV	addi	a1, @const, 0
+RISCV	addi	a2, @r0, 1      # length of our string
+RISCV	addi	a7, @r0, 64     # linux write system call
+RISCV	ecall	# Call linux to output the string
+
+ARM		mov		@r10, #0
+
+RISCV	jr		ra
+
+MIPS	nop
+SPARC	nop
+ARM	    nop
+# ###########################################
+# next pin :> @r15 (4 byte pin)               #
+# ###########################################
+next_pin:
+RISCV	add		@r14, @r0, @r1
+# verify no more than allowed next pins
+SPARC	mov		%l6, @r2
+RISCV	beq		@r2,x0, quitit
+SPARC	dec		%l6
+
+# Open file
+RISCV	add		@r20, @r0, @r1
+SPARC	set		randfn,%r2
+ARM		mov		@r0, @r4
+RISCV	addi	@r1, @r0, 0
+ARM		mov		@r7, #5               ; @r7 = 5 for open file
+ARM		svc		#0                   ; invoke syscall    ARM
+ARM		mov		@r2, @r0
+
+SPARC	mov		@r2,%o5
+# Reading from FD 3 ; mips(v0)/sparc(g1)
+SPARC	mov		@r2,%o0	     # sparc(g2)/mips(arg0,x4) stored above, mov @r4 -> %o0
+MIPS	addi	@r2, @sp, 8
+SPARC	mov		@r2,%o1      # mov from mips(v0)/sparc(g1) into o1 (userinput)
+SPARC	mov		3, @r2	     # 3 is SYS_read
+SPARC	mov		4,%o2	     # number of characters to read
+SPARC	ta		0x10         # do SYSCALL
+
+RISCV	lw		@r15, 8(@sp)
+RISCV	sw		@r0, 8(@sp)
+
+SPARC	mov		%o5, @r4
+MIPS	li		@r2, 6
+MIPS	syscall
+MIPS	lw	@r4, 4(@sp)
+RISCV	lb		@r5, 12(@sp)
+
+
+RISCV	jal		do_encryption
+
+ARM		mov		pc, @r14
+
+# ###########################################
+# choose your own game                      #
+# ###########################################
+MIPS	li		@r5, 0x31          ; Random nopish
+ARM	    mov		@r5, #0x31         ; Random nopish
+SPARC   add     @r2, 0x11, @r2    ; Random nopish
+SPARC	mov		422, %o0		   ; Random nopish
+choose_game:
+
+#############################################################
+# Choice prompt
+#############################################################
+ARM		nop
+RISCV	nop
+choice_prompt:
+MIPS	sw		@zero, 8(@sp)   # init to 0, menu character
+
+SPARC	mov		4, @r2			! 4 is SYS_write
+SPARC	mov		1,%o0			! 1 is stdout
+SPARC	set		choiceprompt,%o1		! pointer to buffer
+SPARC	mov		%o1, @r4
+SPARC	mov		8,%o2	! length
+SPARC	ta		0x10
+
+# reading in from std input into action variable at stack+8
+SPARC	mov		0,%o0			    ! 0 is stdin
+MIPS	addi	@r2, @sp, 8      # stack+8, char input
+SPARC	mov		@r2,%o1
+SPARC	mov		3, @r2			# 3 is SYS_read
+SPARC	mov		1,%o2	        ! count
+SPARC	ta		0x10           ! do SYSCALL # 118
+SPARC	mov		%o0,%g3
+
+RISCV	addi	a0, @sp, 8     #  load value at @sp+8
+MIPS	lw		@r4, 8(@sp)        ; load entered balue into @r4/a0
+MIPS	addi	@r11, @zero, 1    ; length to a1
+RISCV	jal		println
+
+MIPS	li		@r5, 0x31          ; 1 option
+RISCV	beq		@r4, @r5, game_action
+MIPS	li		@r5, 0x32          ; 2 option
+RISCV	beq		@r4, @r5, game_action
+MIPS	li		@r5, 0x33          ; 3 option
+RISCV	beq		@r4, @r5, game_action
+MIPS	li		@r5, 0x34          ; 4 option
+RISCV	beq		@r4, @r5, game_action
+MIPS	li		@r5, 0x35          ; 5 option
+RISCV	beq		@r4, @r5, game_action
+MIPS	li		@r5, 0x36          ; 6 option
+RISCV	beq		@r4, @r5, game_action
+MIPS	li		@r5, 0x37          ; 7 option
+RISCV	beq		@r4, @r5, game_action
+MIPS	li		@r5, 0x38          ; 8 option
+RISCV	beq		@r4, @r5, game_action
+MIPS	li		@r5, 0x39          ; 9 option
+RISCV	beq		@r4, @r5, game_action
+MIPS	li		@r5, 0x61          ; a option
+RISCV	beq		@r4, @r5,game_action
+MIPS	li		@r5, 0x62          ; b option
+
+RISCV	beq		@r4, @r5,game_action
+MIPS	li		@r5, 0x63          ; c option
+RISCV	beq		@r4, @r5,game_action
+MIPS	li		@r5, 0x64          ; d option
+RISCV	beq		@r4, @r5,game_action
+MIPS	li		@r5, 0x65          ; e option
+RISCV	beq		@r4, @r5,game_action
+MIPS	li		@r5, 0x66          ; f option
+RISCV	beq		@r4, @r5,game_action
+
+
+MIPS	b	ready_prompt
+
+#############################################################
+# Game action
+#############################################################
+game_action:
+MIPS	lui		@r4,0x7a6d        ; loading mz
+RISCV	add		@r4, @r5, @r4
+MIPS	or		@r4,0x2e00        ; loading .
+RISCV	lw		@r3, 32(@sp)
+RISCV	sw		@r4, 4(x3)       ; save filename to sp+8
+RISCV	sw		@r0, 8(x3)
+MIPS	lui		@r4,0x2f2f        ; loading mz
+MIPS	or		@r4, 0x2f2f
+RISCV	sw		@r4, 0(x3)       ; save filename to sp+8
+
+
+RISCV	addi	a0, @r3, 0     #  load value at @sp+32->
+MIPS	addi	@r11, @zero, 8    ; length to a1
+RISCV	jal		println
+
+RISCV	lw		@r3, 32(@sp)
+
+# open FLAG  file
+MIPS	li		@r2, 4005       # system call for open file
+RISCV	addi	@r4, @r3, 0
+MIPS	li		@r5, 0          # Open for reading (flags are 0: read, 1: write)
+MIPS	li		@r6, 0          # mode is ignored
+MIPS	syscall	# open a file (file descriptor returned in @r2)
+MIPS	move	@r4, @r2        # save the file descriptor
+
+RISCV	lw		@r3, 32(@sp)
+
+SPARC	mov		@r4,%o0	     # sparc(g2)/mips(arg0,x4) stored above, mov @r4 -> %o0
+#MIPS	lw	@r2, 32(@sp)     # get address of char * from stack
+RISCV	addi	@r2, @r3, 12
+SPARC	mov		@r2,%o1      # move char * into o1
+SPARC	mov		51,%o2	     # LEN number of characters to read
+SPARC	mov		3, @r2	     # 3 is SYS_read
+SPARC	ta		0x10         # do SYSCALL
+SPARC	mov		%o0, @r2      # bytes read in
+
+MIPS	li		@r2, 4006
+MIPS	syscall
+RISCV	lw	@r3, 32(@sp)
+
+#RISCV	addi	@r11, @sp, 32
+RISCV	addi	a0, @r0, 1      # 1 = StdOut
+#RISCV	lw	a1, 32(@sp)
+RISCV	addi	a1, @r3, 12
+RISCV	li		a2, 51
+RISCV	addi	a7, @r0, 64     # linux write system call
+RISCV	ecall	# Call linux to output the string
+
+MIPS	b	choice_prompt
+
+# ###########################################
+# end of program catch all                  #
+# ###########################################
+MIPS	nop
+SPARC	nop
+ARM	nop
+RISCV	nop
+gitgone:
+MIPS	li		@r4, 42
+MIPS	li		@r2, 4001 # terminate program
+MIPS	syscall
+# ######################################################################################
+#                                  DATA SECTION
+# ######################################################################################
+# auth = 7, read=6, lic = 4, flag=5, authf = 22
+.data
+hangup:
+.string "\nATH0 \n"
+entryprompt:
+.string "READY"
+licfn:
+.string	"/lic"
+flagfn:
+.string	"/flag"
+.msgend:
+authfmsg:
+.string "Authorization failed!\n"
+fmsg:
+.string "GREETINGS PROFESSOR FALKEN.\n\n"
+endfmsg:
+enter_key_prompt:
+.string "Enter the license key encrypted with the pin generated by your Protovision Fob"
+end_enter_key_prompt:
+stars:
+.string "********************************"
+randfn:
+.string "/dev/urandom"
+gamesfn:
+.string	"/games"
+choiceprompt:
+.string "CHOOSE >"
+dragon:
+.string "Protovision's software distribution server\nCopyright 1981. All rights reserved.\n                          {\\__--_/}                             /===-_---~~~~~~~~~------____   \n                          /'   (_/ \\            {\\__--_/}      |===-~___                _,-'  \n                 -==\\    |0  0 _/)  \\          /'   (_/  \\   `//~  \\   ~~~~`---.___.-~~   \n             ______-==|  / /~ ,_/<|  \\       ||0  0 _/)| |    | |   \\           _-~`  \n       __--~~~  ,-/-==\\ o o _// >-<\\  |     / /~ ,_/   | |   / |    `\\        ,'  \n    _-~       /'    |   (^(~  | >-<|  |     o o _//|>-</ | / /       \\      /   \n  .'        /       |     \\   \\_>-<|  |   (^(~   |_>-<|  | /'/         \\   /'  \n /  ____  /         |       \\ |_>-<| |          /_>-<_| | _ /           \\/'  \n/-'~    ~~~~~---__  |       /        \\    ____  |_>-<_/ |           _--~`  \n                  \\_|      /        _)  /^    ^ />-</ _/           //    \n                    '~~--_/      _-~/-| \\      \\   _/          __//  \n                   {\\__--_/}    / \\_>-|  {\\_--__/}           _/ \n                   /'   (_/  _-~  | |_/|  \\_)   '\\         / \n                  |0  0 _/) )-~     | ||  (\\_ 0  0| --~~~~  \n                  / /~ ,_/       / /__>--  \\_, ~\\ \\  \n                 o o _//        /-~_>---<    \\_ o o  \n                 (^(~          /~_>---<__     | ~)^)  \n                ,/|           /__>--<__/     |   \\.\\  \n             ,//('(          |__>--<__|     /     \\.\\_         .----_  \n            ( ( '))          |__>--<__|    |       \\. \\       /' _---_~   \n         `-)) )) (           |__>--<__|    |         \\.\\_   /'  /     ~\\`   \n        ,/,'//( (             \\__>--<__\\    \\         \\_.\\ /'  //       ||  \n      ,( ( ((, ))              ~-__>--<_~-_  ~--____---'\\.\\_ /'/        /'  \n    `~/  )` ) ,/|                 ~-_~>--<_/-__          \\_.\\ /  \n  ._-~//( )/ )) `                    ~~-'_/_/ /~~~~~__--~~ \\_\\   \n   ;'( ')/ ,)(                              ~~~~~~~~~~       \\\\     \n  ' ') '( (/                                                  '\\     \n    '   '  `\n"
+end_dragon:
+
+
